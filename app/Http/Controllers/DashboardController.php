@@ -26,6 +26,11 @@ class DashboardController extends Controller
         return view('admin.stock.index');
     }
 
+    public function customer()
+    {
+        return view('admin.customers.index');
+    }
+
     public function pos()
     {
         return view('admin.pos.index');

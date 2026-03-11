@@ -10,15 +10,20 @@
             <div class="card mb-3">
                 <div class="card-body py-3">
                     <div class="row g-2">
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <div class="input-group">
                                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                                 <input type="text" class="form-control" placeholder="Search product by name or SKU..." id="searchInput">
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <select class="form-select" id="categoryFilter">
                                 <option value="">All categories</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="customerSelect">
+                                <option value="">Select Customer</option>
                             </select>
                         </div>
                     </div>
@@ -48,6 +53,17 @@
                     <span class="badge bg-white text-primary" id="cartBadge">0 items</span>
                 </div>
                 <div class="card-body p-0">
+                    <!-- Selected Customer Info -->
+                    <div class="border-bottom p-2 bg-light" id="selectedCustomerInfo" style="display: none">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-person-circle text-primary"></i>
+                            <div>
+                                <div class="fw-semibold small" id="selectedCustomerName"></div>
+                                <div class="text-muted small" id="selectedCustomerMobile"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Cart Items -->
                     <div class="p-3" style="max-height: 320px; overflow-y: auto;" id="cartItemsContainer">
                         <div class="text-center text-muted py-4">Cart is empty</div>
@@ -99,7 +115,7 @@
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small text-muted mb-1">Invoice No</label>
-                                <input type="text" class="form-control form-control-sm"  id="invoiceNoInput" value="" readonly>
+                                <input type="text" class="form-control form-control-sm" id="invoiceNoInput" value="" readonly>
                             </div>
                             <div class="col-6">
                                 <label class="form-label small text-muted mb-1">Date</label>
@@ -133,13 +149,15 @@
     @push('scripts')
         <script>
             // API URLS
-            let productsUrl  = '{{ url("/api/v1/products") }}';
+            let productsUrl = '{{ url("/api/v1/products") }}';
             let categoriesUrl = '{{ url("/api/v1/categories") }}';
-            let invoicesUrl  = '{{ url("/api/v1/invoices") }}';
+            let invoicesUrl = '{{ url("/api/v1/invoices") }}';
+            let customersUrl = '{{ url("/api/v1/customers") }}';
 
             // Data holders or State
-            let allProducts  = [];
+            let allProducts = [];
             let allCategories = [];
+            let allCustomers = [];
             let cart = [];
 
             // Helper functions
@@ -170,21 +188,54 @@
             }
 
             // ─── Load Categories ────────────────────────────────────────
-           async function loadCategories(){
-                try{
-                    let response = await axios.get(categoriesUrl,authHeaders());
+            async function loadCategories() {
+                try {
+                    let response = await axios.get(categoriesUrl, authHeaders());
                     allCategories = response.data['data'] || [];
                     let select = document.getElementById('categoryFilter');
                     select.innerHTML = '<option value="">All categories</option>';
-                    allCategories.forEach(function (category){
-                        select.innerHTML += '<option value="'+ category.id + '">'+ escapeHtml(category.name) +'</option>';
+                    allCategories.forEach(function (category) {
+                        select.innerHTML += '<option value="' + category.id + '">' + escapeHtml(category.name) + '</option>';
                     });
-                }catch (err){
+                } catch (err) {
                     showErrorToast(getErrorMessage(err, 'Failed to load categories.'));
                 }
-           }
+            }
 
             loadCategories();
+
+            // ─── Load Customers ─────────────────────────────────────────
+            async function loadCustomers() {
+                try {
+                    let response = await axios.get(customersUrl, authHeaders());
+                    allCustomers = response.data['data'] || [];
+                    let select = document.getElementById('customerSelect');
+                    select.innerHTML = '<option value="">Select Customer</option>';
+                    allCustomers.forEach(function (customer) {
+                        select.innerHTML += '<option value="' + customer.id + '">' + escapeHtml(customer.name) + ' (' + escapeHtml(customer.mobile) + ')' + '</option>';
+                    });
+                } catch (err) {
+                    showErrorToast(getErrorMessage(err, 'Failed to load customers.'));
+                }
+            }
+
+            loadCustomers();
+
+            // ─── Customer Selection Display ──────────────────────────────
+            document.getElementById('customerSelect').addEventListener('change', function () {
+                let customerId = this.value;
+                let infoDiv = document.getElementById('selectedCustomerInfo');
+                if (customerId) {
+                    let customer = allCustomers.find(c => String(c.id) === String(customerId));
+                    if (customer) {
+                        document.getElementById('selectedCustomerName').textContent = customer.name;
+                        document.getElementById('selectedCustomerMobile').textContent = customer.mobile;
+                        infoDiv.style.display = 'block';
+                    }
+                } else {
+                    infoDiv.style.display = 'none';
+                }
+            });
 
             //Load products and render grid
             async function loadProducts() {
@@ -293,7 +344,6 @@
                 if (cart.length === 0) {
                     document.getElementById('invoiceDiscountType').value = '';
                     document.getElementById('invoiceDiscountValue').value = '0';
-                    // document.getElementById('itemDiscountDisplay').innerHTML = '0';
                 }
                 recalcCart();
                 renderCart();
@@ -332,7 +382,6 @@
 
                     if (item.discount_type === 'fixed') {
                         discountAmount = Math.min(item.discount_value * item.quantity, lineBeforeDiscount);
-                        // discountAmount = lineBeforeDiscount - item.discount_value;
                     } else if (item.discount_type === 'percent') {
                         discountAmount = lineBeforeDiscount * (item.discount_value / 100);
                     }
@@ -353,11 +402,11 @@
             }
 
             function getInvoiceDiscountAmount() {
-                let type  = document.getElementById('invoiceDiscountType').value;
+                let type = document.getElementById('invoiceDiscountType').value;
                 let value = parseFloat(document.getElementById('invoiceDiscountValue').value) || 0;
                 let subtotal = getSubtotal();
 
-                if (type === 'fixed')   return Math.min(value, subtotal);
+                if (type === 'fixed') return Math.min(value, subtotal);
                 if (type === 'percent') return Math.round(subtotal * value / 100 * 100) / 100;
                 return 0;
             }
@@ -450,9 +499,10 @@
                 document.getElementById('invoiceDateInput').value = todayDate();
                 document.getElementById('invoiceDiscountType').value = '';
                 document.getElementById('invoiceDiscountValue').value = '0';
+                document.getElementById('customerSelect').value = '';
+                document.getElementById('selectedCustomerInfo').style.display = 'none';
 
                 // Force hide item discount row when resetting
-                // document.getElementById('itemDiscountRow').style.display = 'none';
                 document.getElementById('itemDiscountDisplay').textContent = '- $ 0.00';
 
                 renderCart();
@@ -467,6 +517,7 @@
                 let grandTotal = Math.round((subtotal - discountAmount) * 100) / 100;
                 let invoiceDate = document.getElementById('invoiceDateInput').value;
                 let invoiceNo = document.getElementById('invoiceNoInput').value || null;
+                let customerId = document.getElementById('customerSelect').value || null;
 
                 let items = cart.map(function (item) {
                     return {
@@ -481,6 +532,7 @@
                 });
 
                 return {
+                    customer_id: customerId ? parseInt(customerId) : null,
                     invoice_no: invoiceNo,
                     invoice_date: invoiceDate,
                     items: items,
@@ -497,6 +549,12 @@
             async function submitInvoice(status) {
                 if (cart.length === 0) {
                     showErrorToast('Cart is empty.');
+                    return;
+                }
+
+                let customerVal = document.getElementById('customerSelect').value;
+                if (!customerVal) {
+                    showErrorToast('Please select a customer.');
                     return;
                 }
 

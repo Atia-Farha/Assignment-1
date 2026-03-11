@@ -11,14 +11,13 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use function Symfony\Component\Translation\t;
 
 class InvoiceController extends Controller
 {
     public function index()
     {
         try {
-            $invoices = Invoice::with(['items.product.category'])
+            $invoices = Invoice::with(['items.product.category', 'customer'])
                 ->orderByDesc('id')
                 ->get();
 
@@ -27,11 +26,11 @@ class InvoiceController extends Controller
                 'message' => 'Invoices list fetched successfully',
                 'data' => $invoices,
             ]);
-        }catch (\Throwable $e){
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong while fetching invoices',
-            ],500);
+            ], 500);
         }
     }
 
@@ -39,6 +38,7 @@ class InvoiceController extends Controller
     {
         try {
             $validated = $request->validate([
+                'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
                 'invoice_no' => ['nullable', 'string', 'max:255', 'unique:invoices,invoice_no'],
                 'invoice_date' => ['required', 'date'],
                 'items' => ['required', 'array', 'min:1'],
@@ -59,11 +59,12 @@ class InvoiceController extends Controller
             // Invoice creation logic goes here
             DB::beginTransaction();
 
-            if (empty($validated['invoice_no'])){
+            if (empty($validated['invoice_no'])) {
                 $validated['invoice_no'] = $this->generateInvoiceNumber();
             }
 
             $invoice = Invoice::create([
+                'customer_id' => $validated['customer_id'] ?? null,
                 'invoice_no' => $validated['invoice_no'],
                 'invoice_date' => $validated['invoice_date'],
                 'subtotal' => $validated['subtotal'],
@@ -88,7 +89,7 @@ class InvoiceController extends Controller
             }
 
             // Create stock movements for the invoice items id finalized
-            if ($invoice->status === 'finalized'){
+            if ($invoice->status === 'finalized') {
                 $this->createStockMovement($invoice);
             }
 
@@ -96,29 +97,29 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice created successfully',
-                'data' => $invoice->load(['items.product.category']),
+                'data' => $invoice->load(['items.product.category', 'customer']),
             ], 201);
-        }catch (ValidationException $e){
+        } catch (ValidationException $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
                 'errors' => $e->errors(),
-            ],422);
-        }catch (\Throwable $e){
+            ], 422);
+        } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong while creating invoice',
                 'errors' => $e->getMessage(),
-            ],500);
+            ], 500);
         }
     }
 
     public function show(int $id)
     {
         try {
-            $invoice = Invoice::with(['items.product.category'])->find($id);
+            $invoice = Invoice::with(['items.product.category', 'customer'])->find($id);
             if (!$invoice) {
                 return response()->json([
                     'success' => false,
@@ -130,12 +131,12 @@ class InvoiceController extends Controller
                 'message' => 'Invoice fetched successfully',
                 'data' => $invoice,
             ]);
-        }catch (\Throwable $e){
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong while fetching invoice',
                 'errors' => $e->getMessage(),
-            ],500);
+            ], 500);
         }
     }
 
@@ -151,7 +152,7 @@ class InvoiceController extends Controller
                 ], 404);
             }
 
-            if ($invoice->status === 'finalized'){
+            if ($invoice->status === 'finalized') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Finalized invoices cannot be updated',
@@ -159,6 +160,7 @@ class InvoiceController extends Controller
             }
 
             $validated = $request->validate([
+                'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
                 'invoice_no' => ['sometimes', 'required', 'string', 'max:255', 'unique:invoices,invoice_no,' . $invoice->id],
                 'invoice_date' => ['sometimes', 'required', 'date'],
                 'items' => ['sometimes', 'required', 'array', 'min:1'],
@@ -208,11 +210,15 @@ class InvoiceController extends Controller
                 'status' => $validated['status'] ?? $invoice->status,
             ];
 
-            if (isset($validated['subtotal'])){
+            if (array_key_exists('customer_id', $validated)) {
+                $updateData['customer_id'] = $validated['customer_id'];
+            }
+
+            if (isset($validated['subtotal'])) {
                 $updateData['subtotal'] = $validated['subtotal'];
                 $updateData['discount_amount'] = $validated['discount_amount'];
                 $updateData['grand_total'] = $validated['grand_total'];
-            }elseif (isset($validated['discount_amount'])){
+            } elseif (isset($validated['discount_amount'])) {
                 $updateData['discount_amount'] = $validated['discount_amount'];
                 $updateData['grand_total'] = $validated['grand_total'];
             }
@@ -221,7 +227,7 @@ class InvoiceController extends Controller
 
             // If status changed to finalized, create stock movements
             $newStatus = $validated['status'] ?? $invoice->status;
-            if ($oldStatus !== 'finalized' && $newStatus === 'finalized'){
+            if ($oldStatus !== 'finalized' && $newStatus === 'finalized') {
                 $this->createStockMovement($invoice->fresh());
             }
 
@@ -230,23 +236,23 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice updated successfully',
-                'data' => $invoice->load(['items.product.category']),
+                'data' => $invoice->load(['items.product.category', 'customer']),
             ]);
 
-        }catch (ValidationException $e){
+        } catch (ValidationException $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
                 'errors' => $e->errors(),
-            ],422);
-        }catch (\Throwable $e){
+            ], 422);
+        } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong while updating invoice',
                 'errors' => $e->getMessage(),
-            ],500);
+            ], 500);
         }
     }
 
@@ -256,14 +262,14 @@ class InvoiceController extends Controller
     {
         try {
             $invoice = Invoice::find($id);
-            if (!$invoice){
+            if (!$invoice) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invoice not found',
                 ], 404);
             }
 
-            if ($invoice->status === 'finalized'){
+            if ($invoice->status === 'finalized') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Finalized invoices cannot be deleted',
@@ -278,25 +284,25 @@ class InvoiceController extends Controller
                 'success' => true,
                 'message' => 'Invoice deleted successfully',
             ]);
-        }catch (\Throwable $e){
+        } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong while deleting invoice',
                 'errors' => $e->getMessage(),
-            ],500);
+            ], 500);
         }
     }
 
 
     private function createStockMovement(Invoice $invoice)
     {
-        foreach ($invoice->items as $item){
+        foreach ($invoice->items as $item) {
             // Logic to create stock movement for each item
             $product = Product::findOrFail($item->product_id);
 
             //Check stock availability
-            if ($product->stock_qty < $item->quantity){
+            if ($product->stock_qty < $item->quantity) {
                 throw new \Exception("Insufficient stock for product : {$product->product_name}. Available stock: {$product->stock_qty}, Required: {$item->quantity}");
             }
 
@@ -322,19 +328,16 @@ class InvoiceController extends Controller
         $month = Carbon::now()->format('m');
 
         //get the last invoice number
-        $lastInvoice = Invoice::where('invoice_no','like', "INV-{$year}-{$month}%")
+        $lastInvoice = Invoice::where('invoice_no', 'like', "INV-{$year}-{$month}%")
             ->orderByDesc('invoice_no')
             ->first();
-        if ($lastInvoice){
-            $sequence = (int) substr($lastInvoice->invoice_no,-4);
-            $sequence ++;
-        }else{
+        if ($lastInvoice) {
+            $sequence = (int) substr($lastInvoice->invoice_no, -4);
+            $sequence++;
+        } else {
             $sequence = 1;
         }
 
         return sprintf('INV-%s-%s-%04d', $year, $month, $sequence);
     }
-
-
-
 }

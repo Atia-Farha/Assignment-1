@@ -21,7 +21,7 @@
 
 @push('scripts')
     <script>
-        function viewInvoice(id){
+        function viewInvoice(id) {
             let invoice = invoicesData.find(inv => inv.id === id);
             let body = document.getElementById('invoiceShowBody');
 
@@ -44,6 +44,8 @@
             }
 
             let invoiceDate = invoice.invoice_date ? invoice.invoice_date.substring(0, 10) : '-';
+            let customerName = invoice.customer ? invoice.customer.name : '-';
+            let customerMobile = invoice.customer ? invoice.customer.mobile : '-';
             let items = invoice.items || [];
             let itemsRows = '';
 
@@ -67,17 +69,17 @@
                 }
 
                 itemsRows += `
-                <tr>
-                    <td>${idx + 1}</td>
-                    <td>
-                        <div class="fw-semibold">${productName}</div>
-                        <div class="text-muted small">${categoryName}</div>
-                    </td>
-                    <td class="text-center">${qty}</td>
-                    <td class="text-end">$ ${unitPrice}</td>
-                    <td class="text-end">${itemDiscountHtml}</td>
-                    <td class="text-end fw-semibold">$ ${lineTotal}</td>
-                </tr>`;
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>
+                            <div class="fw-semibold">${productName}</div>
+                            <div class="text-muted small">${categoryName}</div>
+                        </td>
+                        <td class="text-center">${qty}</td>
+                        <td class="text-end">$ ${unitPrice}</td>
+                        <td class="text-end">${itemDiscountHtml}</td>
+                        <td class="text-end fw-semibold">$ ${lineTotal}</td>
+                    </tr>`;
             });
 
             if (items.length === 0) {
@@ -100,57 +102,62 @@
             }
 
             body.innerHTML = `
-            <div id="invoicePrintArea">
-                <div class="d-flex justify-content-between align-items-start mb-4">
-                    <div>
-                        <h4 class="mb-1">${invoice.invoice_no || ''}</h4>
-                        <div class="text-muted">Date: ${invoiceDate}</div>
+                <div id="invoicePrintArea">
+                    <div class="d-flex justify-content-between align-items-start mb-4">
+                        <div>
+                            <h4 class="mb-1">${invoice.invoice_no || ''}</h4>
+                            <div class="text-muted">Date: ${invoiceDate}</div>
+                            <div class="mt-2">
+                                <div class="text-muted small">Customer</div>
+                                <div class="fw-semibold">${customerName}</div>
+                                <div class="text-muted small">${customerMobile}</div>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            ${statusBadge}
+                        </div>
                     </div>
-                    <div class="text-end">
-                        ${statusBadge}
-                    </div>
-                </div>
 
-                <hr>
+                    <hr>
 
-                <h6 class="mb-3">Items</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 40px;">#</th>
-                                <th>Product</th>
-                                <th class="text-center" style="width: 70px;">Qty</th>
-                                <th class="text-end" style="width: 110px;">Unit Price</th>
-                                <th class="text-end" style="width: 140px;">Discount</th>
-                                <th class="text-end" style="width: 120px;">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsRows}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="row justify-content-end mt-3">
-                    <div class="col-sm-6 col-md-5">
-                        <table class="table table-sm mb-0">
-                            <tr>
-                                <td class="text-muted border-0">Subtotal</td>
-                                <td class="text-end border-0">$ ${subtotal}</td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">Discount</td>
-                                <td class="text-end text-danger">${invoiceDiscountHtml}</td>
-                            </tr>
-                            <tr class="fw-bold">
-                                <td>Grand Total</td>
-                                <td class="text-end fs-5">$ ${grandTotal}</td>
-                            </tr>
+                    <h6 class="mb-3">Items</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th>Product</th>
+                                    <th class="text-center" style="width: 70px;">Qty</th>
+                                    <th class="text-end" style="width: 110px;">Unit Price</th>
+                                    <th class="text-end" style="width: 140px;">Discount</th>
+                                    <th class="text-end" style="width: 120px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsRows}
+                            </tbody>
                         </table>
                     </div>
-                </div>
-            </div>`;
+
+                    <div class="row justify-content-end mt-3">
+                        <div class="col-sm-6 col-md-5">
+                            <table class="table table-sm mb-0">
+                                <tr>
+                                    <td class="text-muted border-0">Subtotal</td>
+                                    <td class="text-end border-0">$ ${subtotal}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Discount</td>
+                                    <td class="text-end text-danger">${invoiceDiscountHtml}</td>
+                                </tr>
+                                <tr class="fw-bold">
+                                    <td>Grand Total</td>
+                                    <td class="text-end fs-5">$ ${grandTotal}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
 
             let modalEl = document.getElementById('invoiceShowModal');
             let modal = new bootstrap.Modal(modalEl);
@@ -158,47 +165,40 @@
 
         }
 
-        // function printInvoice(){
-        //     let w = window.open('', '_blank');
-        //     w.document.write(document.getElementById('invoicePrintArea').innerHTML);
-        //     w.print();
-        // }
-
-        function printInvoice(){
+        function printInvoice() {
             let printArea = document.getElementById('invoicePrintArea');
-            if(!printArea) return;
+            if (!printArea) return;
 
             let printWindow = window.open('', '_blank', 'width=800,height=600');
             printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Print Invoice</title>
-                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-                <style>
-                    body { padding: 30px; font-size: 14px; }
-                    .badge { border: 1px solid #ccc; }
-                    @media print {
-                        body { padding: 15px; }
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Print Invoice</title>
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+                    <style>
+                        body { padding: 30px; font-size: 14px; }
                         .badge { border: 1px solid #ccc; }
-                    }
-                </style>
-            </head>
-            <body>
-                ${printArea.innerHTML}
+                        @media print {
+                            body { padding: 15px; }
+                            .badge { border: 1px solid #ccc; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${printArea.innerHTML}
 
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        window.onafterprint = function() { window.close(); };
-                    };
-                <\/script>
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            window.onafterprint = function() { window.close(); };
+                        };
+                    <\/script>
 
-            </body>
-            </html>
-            `);
+                </body>
+                </html>
+                `);
             printWindow.document.close();
         }
-
     </script>
 @endpush
